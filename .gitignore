@@ -9,11 +9,16 @@ dist/
 artifacts/
 logs/
 mlruns/
+mlartifacts/
 
 .ipynb_checkpoints/
 
 .env
 .env.*
+!.env.example
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 user_profile.json
 .DS_Store
