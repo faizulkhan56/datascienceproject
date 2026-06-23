@@ -329,13 +329,34 @@ This repository now tracks dataset directories with DVC:
 - `data/raw.dvc`
 - `data/processed.dvc`
 
+Commit these DVC metadata files:
+
+- `data/raw.dvc`
+- `data/processed.dvc`
+- `data/.gitignore`
+- `.dvc/config`
+- `.dvc/.gitignore`
+- `.dvcignore`
+
+Do not commit:
+
+- `.dvc/config.local`
+- `.env`
+- actual files inside `data/raw/`
+- actual files inside `data/processed/`
+
 If your DVC remote is already configured, pull the tracked data with:
 
 ```bash
 dvc pull
 ```
 
-If no DVC remote is configured yet, the pipeline can still recreate the local dataset by running `python main.py`, but those files will only remain local until you configure a remote and push them.
+If no DVC remote is configured yet, the pipeline can still recreate the local dataset by running `python main.py`. That command recreates:
+
+- `data/raw/`
+- `data/processed/`
+
+Those files will remain local until you configure a DVC remote and push them.
 
 ## 8. DagsHub and MLflow Setup
 
@@ -375,6 +396,15 @@ For this project, the MLflow URI currently points to:
 So the matching DagsHub Git repository is typically:
 
 `https://dagshub.com/faizulkhan56/datascienceproject.git`
+
+Practical sequence for an existing GitHub project:
+
+1. Create or open the matching repository in DagsHub.
+2. Use DagsHub's "connect existing repository" flow or add DagsHub as an additional Git remote from your local clone.
+3. Confirm your code is visible in DagsHub after a normal Git push.
+4. Configure `.env` locally for MLflow credentials.
+5. Run `python main.py` and verify experiment runs appear in DagsHub MLflow.
+6. Configure the DVC remote and push tracked data if you also want dataset versioning visible in DagsHub.
 
 ### 8.2 How MLflow is configured in this project
 
@@ -437,6 +467,66 @@ To make those datasets visible in DagsHub's data area, you still need to do the 
 4. Commit and push the generated DVC metadata files.
 
 After that, collaborators can use `dvc pull` after cloning the repo.
+
+### 8.6 Configure DVC remote with DagsHub Storage
+
+After your Git repository is already connected to DagsHub and MLflow tracking is working, configure the DVC remote in this order.
+
+Browser steps:
+
+1. Open your DagsHub repository homepage.
+2. Find the repository storage / remote / data-connection area.
+3. Open the data-storage instructions for `DVC`.
+4. Copy the repository-specific setup values shown there.
+
+Terminal steps:
+
+```bash
+./.venv/Scripts/dvc.exe remote add -d dagshub s3://dvc
+./.venv/Scripts/dvc.exe remote modify dagshub endpointurl https://dagshub.com/<username>/<repo>.s3
+./.venv/Scripts/dvc.exe remote modify --local dagshub access_key_id <token>
+./.venv/Scripts/dvc.exe remote modify --local dagshub secret_access_key <token>
+```
+
+Notes:
+
+- `dagshub` is the DVC remote name and is intentionally separate from Git `origin`
+- `-d` makes it the default DVC remote
+- `--local` stores credentials in `.dvc/config.local`, which must not be committed
+
+Verify the remote:
+
+```bash
+./.venv/Scripts/dvc.exe remote list
+```
+
+Push the tracked dataset:
+
+```bash
+./.venv/Scripts/dvc.exe push -r dagshub
+```
+
+Or, because it is the default:
+
+```bash
+./.venv/Scripts/dvc.exe push
+```
+
+Verify after push:
+
+```bash
+./.venv/Scripts/dvc.exe status
+git status
+```
+
+Expected outcome:
+
+- DVC status is up to date
+- Git status remains clean or only shows intentional tracked config changes
+- `.dvc/config.local` stays untracked
+- actual files under `data/raw/` and `data/processed/` stay out of Git
+
+Then refresh the DagsHub repository page and check the data-related view again.
 
 ## 9. Run the Project Locally Without Docker
 
@@ -593,12 +683,13 @@ Recommended sequence for a fresh user:
 1. Clone the repository
 2. Create `.env`
 3. Install dependencies or use Docker
-4. Configure DVC remote access if you want shared dataset versioning on DagsHub
-5. Check `config/config.yaml`
-6. Run the training flow
-7. Confirm `data/` and `artifacts/` are generated
-8. Confirm MLflow logs appear in DagsHub
-9. Use the browser app for prediction and training
+4. If a DVC remote already exists, run `dvc pull`; otherwise run `python main.py` to recreate `data/raw/` and `data/processed/`
+5. Configure DVC remote access if you want shared dataset versioning on DagsHub
+6. Check `config/config.yaml`
+7. Start the application with `docker compose up -d` or `python app.py`
+8. Confirm `data/` and `artifacts/` are present
+9. Confirm MLflow logs appear in DagsHub
+10. Use the browser app for prediction and training
 
 ## 12. How to Check Results
 
@@ -895,6 +986,17 @@ Optional DVC pull:
 dvc pull
 ```
 
+DVC remote setup with DagsHub Storage:
+
+```bash
+./.venv/Scripts/dvc.exe remote add -d dagshub s3://dvc
+./.venv/Scripts/dvc.exe remote modify dagshub endpointurl https://dagshub.com/<username>/<repo>.s3
+./.venv/Scripts/dvc.exe remote modify --local dagshub access_key_id <token>
+./.venv/Scripts/dvc.exe remote modify --local dagshub secret_access_key <token>
+./.venv/Scripts/dvc.exe remote list
+./.venv/Scripts/dvc.exe push -r dagshub
+```
+
 Run pipeline:
 
 ```bash
@@ -962,3 +1064,11 @@ This repository is now structured so that a new user can:
 6. test the browser-based training and prediction flow
 
 If you keep `.env` local, rebuild Docker after runtime changes, and monitor `logs/training.log` plus DagsHub MLflow, the project is straightforward to operate end-to-end.
+
+Minimal rebuild path from zero:
+
+1. Clone the repository
+2. Create `.env`
+3. Install dependencies with `pip install -r requirements.txt`
+4. Run `dvc pull` if the DVC remote is already configured; otherwise run `python main.py`
+5. Start with `docker compose up -d` or `python app.py`
