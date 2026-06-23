@@ -105,10 +105,10 @@ Understanding the data helps explain model behavior:
 | Stage | Location |
 |-------|----------|
 | Remote source | GitHub ZIP URL in `config/config.yaml` |
-| Downloaded archive | `artifacts/data_ingestion/data.zip` |
-| Extracted CSV | `artifacts/data_ingestion/winequality-red.csv` |
-| Train split | `artifacts/data_transformation/train.csv` |
-| Test split | `artifacts/data_transformation/test.csv` |
+| Downloaded archive | `data/raw/data.zip` |
+| Extracted CSV | `data/raw/winequality-red.csv` |
+| Train split | `data/processed/train.csv` |
+| Test split | `data/processed/test.csv` |
 
 ---
 
@@ -348,7 +348,7 @@ Pipeline classes (src/datascience/pipeline/)
 Component classes (src/datascience/components/)
             |
             v
-artifacts/ + logs/ + MLflow/DagsHub
+data/ + artifacts/ + logs/ + MLflow/DagsHub
             |
             v
 Flask app (app.py) + PredictionPipeline
@@ -360,6 +360,7 @@ This separation is important:
 - **entity classes** define the structure of that configuration
 - **component classes** do the real work
 - **pipeline classes** orchestrate component execution
+- **DVC** versions raw and processed datasets under `data/`
 - **`main.py`** runs the whole training workflow
 - **`app.py`** exposes browser routes for training and prediction
 
@@ -426,10 +427,9 @@ Pipelines stay thin so you can test and swap components without rewriting orches
 
 | Path | Created By | Used By |
 |------|------------|---------|
-| `artifacts/data_ingestion/` | ingestion | validation, transformation |
+| `data/raw/` | ingestion | validation, transformation, DVC |
+| `data/processed/` | transformation | trainer, evaluator, DVC |
 | `artifacts/data_validation/status.txt` | validation | operational check |
-| `artifacts/data_transformation/train.csv` | transformation | model trainer |
-| `artifacts/data_transformation/test.csv` | transformation | model trainer, evaluator |
 | `artifacts/model_trainer/model.joblib` | trainer | evaluator, prediction pipeline |
 | `artifacts/model_evaluation/metrics.json` | evaluator | manual review, CI checks |
 | `logs/logging.log` | logger in `src/datascience/__init__.py` | all stages |
@@ -443,8 +443,8 @@ Pipelines stay thin so you can test and swap components without rewriting orches
 
 ```text
 GitHub ZIP URL
-    → download to artifacts/data_ingestion/data.zip
-    → extract to artifacts/data_ingestion/winequality-red.csv
+    → download to data/raw/data.zip
+    → extract to data/raw/winequality-red.csv
 ```
 
 **Code path:** `main.py` → `DataIngestionTrainingPipeline` → `DataIngestion`
@@ -465,8 +465,8 @@ winequality-red.csv
 ```text
 winequality-red.csv
     → train_test_split (75% / 25%)
-    → artifacts/data_transformation/train.csv
-    → artifacts/data_transformation/test.csv
+    → data/processed/train.csv
+    → data/processed/test.csv
 ```
 
 **Code path:** `main.py` → `DataTransformationTrainingPipeline` → `DataTransformation`
@@ -557,6 +557,12 @@ datascienceproject/
 |-- main.py
 |-- medium.md          ← this guide
 |-- README.md          ← operational reference
+|-- data/
+|   |-- raw.dvc
+|   |-- processed.dvc
+|   |-- raw/
+|   `-- processed/
+|-- .dvc/
 |-- Dockerfile
 |-- docker-compose.yml
 |-- .dockerignore
@@ -675,6 +681,7 @@ Generated at runtime. See Part II for artifact flow.
 - Python 3.11 or compatible
 - Git
 - Docker Desktop and Docker Compose (for containerized runs)
+- DVC CLI (installed by `pip install -r requirements.txt`)
 - DagsHub account
 - Access to the DagsHub repository used for MLflow logging
 
@@ -712,6 +719,21 @@ MLFLOW_TRACKING_PASSWORD=your-dagshub-token
 ```
 
 Do not commit `.env`.
+
+### 13.4 DVC note
+
+This repository now tracks dataset directories with DVC:
+
+- `data/raw.dvc`
+- `data/processed.dvc`
+
+If your DVC remote is already configured, run:
+
+```bash
+dvc pull
+```
+
+If a DVC remote is not configured yet, `python main.py` can still recreate the local data from the configured source URL, but that does not replace a shared remote-backed DVC workflow.
 
 ---
 
@@ -760,6 +782,22 @@ After successful training, confirm:
 - new model version
 - metrics `rmse`, `mae`, `r2`
 
+### 14.5 DVC and DagsHub data versioning
+
+MLflow experiment tracking and DVC data versioning are separate features.
+
+This project now keeps DVC-tracked datasets in:
+
+- `data/raw/`
+- `data/processed/`
+
+To make dataset versions visible in DagsHub's data area, you still need to complete the account-specific remote setup on your side:
+
+1. Configure a DVC remote for your storage backend or DagsHub-supported workflow
+2. Authenticate that remote locally
+3. Run `dvc push`
+4. Commit and push the resulting DVC metadata files
+
 ---
 
 ## 15. Run Locally Without Docker
@@ -795,8 +833,8 @@ Consistent environment: Python, dependencies, Gunicorn, port mapping, volume mou
 ### 16.2 Key files
 
 - **`Dockerfile`** — builds image, runs Gunicorn on port 8080
-- **`docker-compose.yml`** — loads `.env`, maps ports, mounts `artifacts/` and `logs/`
-- **`.dockerignore`** — excludes venv, logs, artifacts, `.env` from build context
+- **`docker-compose.yml`** — loads `.env`, maps ports, mounts `data/`, `artifacts/`, and `logs/`
+- **`.dockerignore`** — excludes venv, data payloads, logs, artifacts, `.env` from build context
 
 ### 16.3 Build and start
 
@@ -834,11 +872,12 @@ docker compose down
 1. Clone the repository
 2. Create `.env`
 3. Install dependencies or use Docker
-4. Review `config/config.yaml`, `params.yaml`, `schema.yaml`
-5. Run `python main.py`
-6. Confirm artifacts in `artifacts/`
-7. Confirm MLflow logs on DagsHub
-8. Start `app.py` and test `/predict`
+4. Configure DVC remote access if you want shared data versioning
+5. Review `config/config.yaml`, `params.yaml`, `schema.yaml`
+6. Run `python main.py`
+7. Confirm data in `data/` and artifacts in `artifacts/`
+8. Confirm MLflow logs on DagsHub
+9. Start `app.py` and test `/predict`
 
 ---
 
@@ -848,11 +887,14 @@ docker compose down
 
 After successful training:
 
-- `artifacts/data_ingestion/`
-- `artifacts/data_transformation/train.csv`
-- `artifacts/data_transformation/test.csv`
+- `data/raw/data.zip`
+- `data/raw/winequality-red.csv`
+- `data/processed/train.csv`
+- `data/processed/test.csv`
 - `artifacts/model_trainer/model.joblib`
 - `artifacts/model_evaluation/metrics.json`
+- `data/raw.dvc`
+- `data/processed.dvc`
 
 ### 18.2 Logs
 
@@ -885,7 +927,7 @@ python -m py_compile main.py
 python main.py
 ```
 
-Success: no exception, artifacts created, metrics JSON, DagsHub run.
+Success: no exception, data directories created or reused, metrics JSON written, DagsHub run created.
 
 ### 19.3 Web app check
 
@@ -913,6 +955,8 @@ docker compose logs -f web
 | Training done? | `logs/training.log` — look for "Model Evaluation stage completed" |
 | Model exists? | `dir artifacts\model_trainer` |
 | Metrics exist? | `type artifacts\model_evaluation\metrics.json` |
+| Raw data exists? | `dir data\raw` |
+| Processed data exists? | `dir data\processed` |
 
 ---
 
@@ -953,6 +997,8 @@ Image installs `git`; `GIT_PYTHON_REFRESH=quiet` reduces noise.
 ## 22. What a Successful Run Looks Like
 
 - all five pipeline stages complete
+- raw data under `data/raw/`
+- processed data under `data/processed/`
 - `metrics.json` saved
 - MLflow run URL in logs
 - new `ElasticnetModel` version created
@@ -978,6 +1024,7 @@ Image installs `git`; `GIT_PYTHON_REFRESH=quiet` reduces noise.
 
 ```bash
 pip install -r requirements.txt
+dvc pull
 python main.py
 python app.py
 docker compose build --no-cache
@@ -1018,7 +1065,12 @@ CONFIG
   params.yaml  = alpha, l1_ratio
   schema.yaml  = columns & target
 
+DATA
+  DVC tracks: data/raw and data/processed
+  artifacts/: model, metrics, validation status, logs remain runtime outputs
+
 RUN
+  dvc pull           # optional, if remote is configured
   python main.py     # full pipeline
   python app.py      # web UI
   docker compose up  # containerized

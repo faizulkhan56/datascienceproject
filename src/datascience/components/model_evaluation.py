@@ -17,7 +17,12 @@ class ModelEvaluation:
         self.config = config
 
     def _load_local_env(self):
-        env_path = Path(__file__).resolve().parents[3] / ".env"
+        project_root = Path(__file__).resolve().parents[3]
+        uv_cache_dir = project_root / ".uv-cache"
+        uv_cache_dir.mkdir(exist_ok=True)
+        os.environ.setdefault("UV_CACHE_DIR", str(uv_cache_dir))
+
+        env_path = project_root / ".env"
         if not env_path.exists():
             return
 

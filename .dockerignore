@@ -10,6 +10,7 @@ __pycache__
 .mypy_cache
 .ipynb_checkpoints
 artifacts
+data
 logs
 mlruns
 mlartifacts

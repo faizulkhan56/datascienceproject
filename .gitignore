@@ -19,6 +19,10 @@ mlartifacts/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.uv-cache/
+.dvc/global/
+.dvc/system/
+.dvc/site-cache/
 
 user_profile.json
 .DS_Store

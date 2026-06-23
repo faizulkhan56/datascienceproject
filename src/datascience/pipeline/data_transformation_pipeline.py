@@ -14,12 +14,14 @@ class DataTransformationTrainingPipeline:
     def initiate_data_transformation(self):
 
         try:
-            with open(Path("artifacts/data_validation/status.txt"),'r') as f:
-                status=f.read().split(" ")[-1]
+            config = ConfigurationManager()
+            validation_config = config.get_data_validation_config()
+
+            with open(Path(validation_config.STATUS_FILE), 'r') as f:
+                status = f.read().split(" ")[-1].strip()
             if status=="True":
-                config=ConfigurationManager()
-                data_transformation_config=config.get_data_transformation_config()
-                data_transformation=DataTransformation(config=data_transformation_config)
+                data_transformation_config = config.get_data_transformation_config()
+                data_transformation = DataTransformation(config=data_transformation_config)
                 data_transformation.train_test_splitting()
             else:
                 raise Exception("Your data scheme is not valid")

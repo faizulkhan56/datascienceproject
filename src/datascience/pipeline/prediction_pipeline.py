@@ -1,12 +1,13 @@
 import joblib
-import numpy as np
-import pandas as pd
 from pathlib import Path
+from src.datascience.config.configuration import ConfigurationManager
 
 
 class PredictionPipeline:
     def __init__(self):
-        self.model=joblib.load(Path('artifacts/model_trainer/model.joblib'))
+        config = ConfigurationManager().get_model_trainer_config()
+        model_path = Path(config.root_dir) / config.model_name
+        self.model = joblib.load(model_path)
 
     def predict(self,data):
         prediction=self.model.predict(data)
